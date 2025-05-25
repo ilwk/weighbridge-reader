@@ -1,0 +1,6 @@
+{
+  "serial_port": "COM10",
+  "baud_rate": 9600,
+  "websocket_port": 8080,
+  "simulate": true
+}

@@ -8,11 +8,12 @@ import (
 	"go.bug.st/serial"
 )
 
-var simulate = true // 启用模拟
+// 是否启用模拟数据
+var simulate = false // 启用模拟
 
 func ReadWeightFromSerial(portName string, baud int, dataChan chan<- string) error {
 	if simulate {
-		return simulateData(dataChan)
+		return SimulateData(dataChan)
 	}
 	ports, err := serial.GetPortsList()
 	println("端口列表:", &ports)
@@ -48,8 +49,12 @@ func ReadWeightFromSerial(portName string, baud int, dataChan chan<- string) err
 	}
 }
 
+func SetSimulate(isSimulate bool) {
+	simulate = isSimulate
+}
+
 // 模拟数据发送
-func simulateData(dataChan chan<- string) error {
+func SimulateData(dataChan chan<- string) error {
 	log.Println("🔁 启用模拟串口数据模式")
 	ticker := time.NewTicker(2 * time.Second)
 

@@ -1,16 +1,26 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"weightbridge-ws/internal/config"
 	"weightbridge-ws/internal/reader"
 	"weightbridge-ws/internal/ws"
 )
 
 func main() {
+	cfg, err := config.LoadConfig("config.json")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	dataChan := make(chan string)
+
 	go func() {
-		err := reader.ReadWeightFromSerial("COM3", 9600, dataChan)
+		reader.SetSimulate(cfg.Simulate)
+		err := reader.ReadWeightFromSerial(cfg.SerialPort, cfg.BaudRate, dataChan)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -20,7 +30,8 @@ func main() {
 		ws.HandleWebSocket(w, r, dataChan)
 	})
 
-	println("地磅读取服务已启动，请访问 http://localhost:8080/ws")
+	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
+	fmt.Printf("地磅读取服务已启动，运行在 http://localhost%s/ws\n", addr)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(addr, nil))
 }
