@@ -3,14 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
-	"weightbridge-ws/internal/scale"
+	"weightbridge-ws/internal/reader"
 	"weightbridge-ws/internal/ws"
 )
 
 func main() {
 	dataChan := make(chan string)
 	go func() {
-		err := scale.Reader("COM3", 9600, dataChan)
+		err := reader.ReadWeightFromSerial("COM3", 9600, dataChan)
 		if err != nil {
 			log.Fatal(err)
 		}

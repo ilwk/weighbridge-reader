@@ -1,4 +1,4 @@
-package scale
+package reader
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 
 var simulate = true // 启用模拟
 
-func Reader(portName string, baud int, dataChan chan<- string) error {
+func ReadWeightFromSerial(portName string, baud int, dataChan chan<- string) error {
 	if simulate {
 		return simulateData(dataChan)
 	}
