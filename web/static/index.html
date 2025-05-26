@@ -28,7 +28,7 @@
 
     <script>
       const output = document.getElementById("output");
-      const ws = new WebSocket("ws://localhost:8080/ws");
+      const ws = new WebSocket("ws://localhost:{{.WebsocketPort}}/ws");
 
       ws.onmessage = (event) => {
         output.textContent += event.data + "\n";
