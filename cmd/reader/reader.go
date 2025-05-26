@@ -15,10 +15,17 @@ func ReadWeightFromSerial(portName string, baud int, dataChan chan<- string) err
 	if simulate {
 		return SimulateData(dataChan)
 	}
+
 	ports, err := serial.GetPortsList()
-	println("端口列表:", &ports)
 	if err != nil {
 		return err
+	}
+
+	if len(ports) == 0 {
+		log.Fatal("没有发现串口设备")
+	}
+	for _, port := range ports {
+		fmt.Printf("端口列表: %v\n", port)
 	}
 
 	mode := serial.Mode{
