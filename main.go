@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"weightbridge-ws/internal/config"
-	"weightbridge-ws/internal/reader"
-	"weightbridge-ws/internal/ws"
+	"weightbridge-reader/cmd/reader"
+	"weightbridge-reader/internal/config"
+	"weightbridge-reader/internal/ws"
+
+	"fyne.io/systray"
+	"fyne.io/systray/example/icon"
 )
 
 func main() {
@@ -32,6 +35,31 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
 	fmt.Printf("地磅读取服务已启动，运行在 http://localhost%s/ws\n", addr)
+	http.ListenAndServe(addr, nil)
 
-	log.Fatal(http.ListenAndServe(addr, nil))
+	systray.Run(onReady, onExit)
+}
+
+func onReady() {
+	systray.SetIcon(icon.Data)
+	systray.SetTitle("地磅读取服务")
+	systray.SetTooltip("地磅读取服务")
+	mQuit := systray.AddMenuItem("退出", "退出程序")
+	mOpen := systray.AddMenuItem("打开页面", "打开程序")
+	go func() {
+		for {
+			select {
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+			case <-mOpen.ClickedCh:
+				fmt.Println("打开页面")
+				return
+			}
+		}
+	}()
+
+}
+
+func onExit() {
+	// TODO
 }
