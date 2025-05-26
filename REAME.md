@@ -51,3 +51,9 @@ go mod tidy
 ```bash
 go run ./cmd/main.go
 ```
+
+## 编译
+
+```bash
+go build -ldflags -H=windowsgui
+```
