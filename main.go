@@ -68,70 +68,41 @@ func broadcast(message string) {
 	}
 }
 
-// 状态缓存与判断
-var (
-	lastBroadcast time.Time
-	lastStatus    string
-	lastWeight    float64
-	minInterval   = 100 * time.Millisecond
-)
-
-func shouldUpdate(status string, weight float64) bool {
-	if status != lastStatus || abs(weight-lastWeight) > 0.05 {
-		lastStatus = status
-		lastWeight = weight
-		return true
-	}
-	return false
-}
-
-func abs(f float64) float64 {
-	if f < 0 {
-		return -f
-	}
-	return f
-}
-
 func parseWeightData(frame string) (status string, weight float64, unit string) {
-	if !(strings.Contains(frame, ",GS") || strings.Contains(frame, ",NT")) {
-		return "", 0, ""
+	// 例: ST,GS     123.45kg
+	// 去除空格前先匹配前缀
+	prefixes := map[string]string{
+		"ST,GS": "stable",
+		"US,GS": "unstable",
+		"OL,GS": "overload",
+		"ST,NT": "zero",
 	}
-	parts := strings.SplitN(frame, " ", 2)
-	if len(parts) != 2 {
-		return "", 0, ""
+
+	for key, val := range prefixes {
+		if strings.HasPrefix(frame, key) {
+			status = val
+			// 去除前缀后是重量数据
+			valueWithUnit := strings.TrimSpace(strings.TrimPrefix(frame, key))
+			unit = ""
+			if strings.HasSuffix(valueWithUnit, "kg") {
+				unit = "kg"
+				valueWithUnit = strings.TrimSuffix(valueWithUnit, "kg")
+			}
+			valueWithUnit = strings.TrimSpace(valueWithUnit)
+			_, err := fmt.Sscanf(valueWithUnit, "%f", &weight)
+			if err != nil {
+				log.Println("数值解析失败:", err)
+				return status, 0, unit
+			}
+			return status, weight, unit
+		}
 	}
-	prefix := strings.TrimSpace(parts[0])
-	valueWithUnit := strings.TrimSpace(parts[1])
-	switch prefix {
-	case "ST,GS":
-	case "ST,NT":
-		status = "stable"
-	case "US,GS":
-	case "US,NT":
-		status = "unstable"
-	case "OV,GS":
-	case "OV,NT":
-		status = "overload"
-	case "ZR,GS":
-	case "ZR,NT":
-		status = "zero"
-	default:
-		status = "unknown"
-	}
-	unit = ""
-	weightStr := valueWithUnit
-	if strings.HasSuffix(valueWithUnit, "kg") {
-		unit = "kg"
-		weightStr = strings.TrimSuffix(valueWithUnit, "kg")
-	}
-	weightStr = strings.TrimSpace(weightStr)
-	_, err := fmt.Sscanf(weightStr, "%f", &weight)
-	if err != nil {
-		log.Println("数值解析失败:", err)
-		return status, 0, unit
-	}
-	return status, weight, unit
+
+	return "", 0, ""
 }
+
+var latestStableFrame string
+var frameMutex sync.Mutex
 
 func startSerialReader() {
 	mode := &serial.Mode{BaudRate: config.BaudRate}
@@ -140,25 +111,41 @@ func startSerialReader() {
 		log.Fatal("串口打开失败:", err)
 	}
 	reader := bufio.NewReader(port)
-	lastBroadcast = time.Now()
-	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			log.Println("串口读取错误:", err)
-			continue
+
+	// goroutine: 持续读取帧，缓存最新稳定帧
+	go func() {
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				log.Println("串口读取错误:", err)
+				continue
+			}
+			cleaned := string(bytes.TrimSpace(line))
+			if cleaned == "" {
+				continue
+			}
+
+			// 只记录稳定帧（你也可以改为记录最新任何帧）
+			if strings.HasPrefix(cleaned, "ST,GS") || strings.HasPrefix(cleaned, "ST,NT") {
+				frameMutex.Lock()
+				latestStableFrame = cleaned
+				frameMutex.Unlock()
+			}
 		}
-		cleaned := string(bytes.TrimSpace(line))
-		status, weight, unit := parseWeightData(cleaned)
-		if status == "" {
-			continue
+	}()
+
+	// goroutine: 每秒推送一次最新帧
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			frameMutex.Lock()
+			if latestStableFrame != "" {
+				log.Println("推送:", latestStableFrame)
+				broadcast(latestStableFrame)
+			}
+			frameMutex.Unlock()
 		}
-		if time.Since(lastBroadcast) >= minInterval && shouldUpdate(status, weight) {
-			lastBroadcast = time.Now()
-			msg := fmt.Sprintf(`{"status":"%s","weight":%.2f,"unit":"%s"}`, status, weight, unit)
-			log.Println("推送:", msg)
-			broadcast(msg)
-		}
-	}
+	}()
 }
 
 func main() {

@@ -1,0 +1,17 @@
+ST,GS     0.0kg
+ST,GS    59.6kg
+ST,GS    59.6kg
+ST,GS    60.0kg
+ST,GS    60.2kg
+ST,GS    60.4kg
+ST,GS    59.8kg
+ST,GS    60.0kg
+ST,GS    60.2kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
+ST,GS     0.0kg
