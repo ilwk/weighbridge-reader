@@ -1,4 +1,4 @@
-module weightbridge-reader
+module reader
 
 go 1.20
 

@@ -1,0 +1,30 @@
+{
+  "port": 9900,
+  "messages": [
+    {
+      "interval": 1000,
+      "message": "ST,GS     0.0kg\r\n",
+      "repeat": 3
+    },
+    {
+      "interval": 1000,
+      "message": "ST,GS     30.0kg\r\n",
+      "repeat": 3
+    },
+    {
+      "interval": 1000,
+      "message": "ST,GS     200.0kg\r\n",
+      "repeat": 3
+    },
+    {
+      "interval": 1000,
+      "message": "ST,GS     0.0kg\r\n",
+      "repeat": 1
+    },
+    {
+      "interval": 1000,
+      "message": "ST,GS    300.0kg\r\n",
+      "repeat": 3
+    }
+  ]
+}
