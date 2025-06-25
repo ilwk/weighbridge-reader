@@ -68,5 +68,5 @@ func PrintHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "Print job submitted successfully for file: %s", handler.Filename)
+	fmt.Fprintf(w, "打印任务发送成功: %s", handler.Filename)
 }

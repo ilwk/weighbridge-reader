@@ -86,7 +86,7 @@ CustomScreenDPI = 0
 
 FileStates [
 	[
-		FilePath = C:\Users\Administrator\Downloads\机动挡车不良率考核统计导出.pdf
+		FilePath = C:\Users\Administrator\AppData\Local\Temp\加弹登记码单 (21).pdf
 		Favorites [
 		]
 		IsPinned = false
@@ -105,17 +105,57 @@ FileStates [
 		DisplayR2L = false
 		ReparseIdx = 0
 	]
+	[
+		FilePath = C:\Users\Administrator\AppData\Local\Temp\加弹登记码单.pdf
+		Favorites [
+		]
+		IsPinned = false
+		IsMissing = false
+		OpenCount = 1
+		UseDefaultState = false
+		DisplayMode = continuous
+		ScrollPos = -1 -1
+		PageNo = 1
+		Zoom = fit page
+		Rotation = 0
+		WindowState = 1
+		WindowPos = 558 0 803 1040
+		ShowToc = false
+		SidebarDx = 0
+		DisplayR2L = false
+		ReparseIdx = 0
+	]
+	[
+		FilePath = C:\Users\Administrator\AppData\Local\Temp\20250621-134532.jpg
+		Favorites [
+		]
+		IsPinned = false
+		IsMissing = false
+		OpenCount = 1
+		UseDefaultState = false
+		DisplayMode = single page
+		ScrollPos = -0.913037 -1
+		PageNo = 1
+		Zoom = fit page
+		Rotation = 0
+		WindowState = 1
+		WindowPos = 558 0 803 1040
+		ShowToc = false
+		SidebarDx = 0
+		DisplayR2L = false
+		ReparseIdx = 0
+	]
 ]
 SessionData [
 	[
 		TabStates [
 			[
-				FilePath = C:\Users\Administrator\Downloads\机动挡车不良率考核统计导出.pdf
-				DisplayMode = continuous
+				FilePath = C:\Users\Administrator\AppData\Local\Temp\20250621-134532.jpg
+				DisplayMode = single page
 				PageNo = 1
 				Zoom = fit page
 				Rotation = 0
-				ScrollPos = -1 -1
+				ScrollPos = -0.913037 -1
 				ShowToc = false
 			]
 		]
