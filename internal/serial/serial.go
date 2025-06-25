@@ -85,7 +85,7 @@ func InitSerial() {
 	// goroutine: 每秒推送一次最新帧
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 			frameMutex.Lock()
 			if latestStableFrame != "" {
 				log.Println("推送:", latestStableFrame)

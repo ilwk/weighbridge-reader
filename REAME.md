@@ -57,3 +57,17 @@ go run ./cmd/main.go
 ```bash
 go build -ldflags -H=windowsgui
 ```
+
+## 其他说明
+
+### 查看当前系统下的打印机
+
+```powershell
+# win7用这个
+wmic printer get name
+
+# win10或以上
+Get-Printer | Select-Object Name
+```
+
+### 命令行打印

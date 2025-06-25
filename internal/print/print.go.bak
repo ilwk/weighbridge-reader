@@ -1,0 +1,121 @@
+package print
+
+import (
+	"image"
+	"image/png"
+	"io"
+	"math"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	"github.com/alexbrainman/printer"
+)
+
+func PrintHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "解析表单失败: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 获取文件
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "无法获取上传文件: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	printerName := r.FormValue("printer")
+
+	// 保存为临时文件
+	tmpFilePath, err := saveTempFile(file, header.Filename)
+	if err != nil {
+		http.Error(w, "保存文件失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer os.Remove(tmpFilePath) // 打印后删除
+
+	if printerName == "" {
+		// 没指定打印机就使用默认第一个
+		names, err := printer.ReadNames()
+		if err != nil || len(names) == 0 {
+			http.Error(w, "无法获取打印机列表", http.StatusInternalServerError)
+			return
+		}
+		printerName = names[0]
+	}
+
+	// 打开图片
+	imgFile, err := os.Open(tmpFilePath)
+	if err != nil {
+		http.Error(w, "打开图片失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer imgFile.Close()
+
+	img, err := png.Decode(imgFile)
+	if err != nil {
+		http.Error(w, "解析 PNG 失败: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 打印
+	if err := printImageToPrinter(printerName, img); err != nil {
+		http.Error(w, "打印失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte("打印成功"))
+}
+
+// 保存临时文件
+func saveTempFile(file multipart.File, filename string) (string, error) {
+	tmpPath := filepath.Join(os.TempDir(), filename)
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	return tmpPath, err
+}
+
+// 打印图片到指定打印机
+func printImageToPrinter(printerName string, img image.Image) error {
+	const (
+		dpi       = 203 // 打印机分辨率（可调）
+		paperMM   = 100 // 打印纸宽度（单位 mm）
+		mmPerInch = 25.4
+	)
+
+	p, err := printer.Open(printerName)
+	if err != nil {
+		return err
+	}
+	defer p.Close()
+
+	d, err := p.StartDocument("Label", "")
+	if err != nil {
+		return err
+	}
+	defer p.EndDocument()
+
+	p.StartPage()
+
+	// 宽度像素 = 纸宽（mm） / 25.4 * DPI
+	widthPx := int(math.Round(float64(paperMM) / mmPerInch * dpi))
+	heightPx := img.Bounds().Dy() * widthPx / img.Bounds().Dx()
+	// 你可以根据标签宽度自定义尺寸，384px 常见于 58mm 热敏打印纸
+	bounds := image.Rect(0, 0, widthPx, heightPx)
+
+	err = printer.DrawImage(p, img, bounds)
+	if err != nil {
+		return err
+	}
+
+	p.EndPage()
+	return nil
+}
