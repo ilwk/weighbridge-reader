@@ -45,7 +45,7 @@ func PrintHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "保存文件失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// defer os.Remove(tmpFilePath) // 打印后删除
+	defer os.Remove(tmpFilePath) // 打印后删除
 
 	args := []string{tmpFilePath}
 

@@ -1,6 +1,0 @@
-{
-  "serial_port": "COM1",
-  "baud_rate": 9600,
-  "websocket_port": 9900,
-  "printer_name": "EPSON TM-T88V"
-}

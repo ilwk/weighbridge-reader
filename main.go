@@ -15,7 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// go serial.InitSerial()
+	go serial.InitSerial()
 	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", serial.HandleWebSocket)
