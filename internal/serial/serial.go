@@ -75,6 +75,11 @@ func InitSerial() {
 
 			// 只记录稳定帧（你也可以改为记录最新任何帧）
 			if strings.HasPrefix(cleaned, "ST,GS") || strings.HasPrefix(cleaned, "ST,NT") {
+				// TODO: 临时处理方案 - 当出现负值时返回0
+				// 前端目前无法正确处理负值情况，等前端修复后需要移除此处理逻辑
+				if strings.Contains(cleaned, "ST,GS-") {
+					cleaned = "ST,GS     0.0kg"
+				}
 				frameMutex.Lock()
 				latestStableFrame = cleaned
 				frameMutex.Unlock()
