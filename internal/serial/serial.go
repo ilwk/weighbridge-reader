@@ -8,6 +8,7 @@ import (
 	"reader/internal/config"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,8 +28,8 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mutex.Lock()
+	defer mutex.Unlock()
 	clients[conn] = true
-	mutex.Unlock()
 	log.Println("新的WebSocket客户端连接")
 }
 
@@ -45,14 +46,10 @@ func broadcast(message string) {
 	}
 }
 
-var latestStableFrame string
-var frameMutex sync.Mutex
+var lastReadData atomic.Value
 
 func InitSerial() {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatal("配置文件加载失败:", err)
-	}
+	cfg := config.LoadConfig()
 	mode := &serial.Mode{BaudRate: cfg.BaudRate}
 	port, err := serial.Open(cfg.SerialPort, mode)
 	if err != nil {
@@ -68,21 +65,18 @@ func InitSerial() {
 				log.Println("串口读取错误:", err)
 				continue
 			}
-			cleaned := string(bytes.TrimSpace(line))
-			if cleaned == "" {
+			readData := string(bytes.TrimSpace(line))
+			if readData == "" {
 				continue
 			}
 
+			// 出现负数处理成0
+			if strings.Contains(readData, "ST,GS-") {
+				readData = "ST,GS     0.0kg"
+			}
 			// 只记录稳定帧（你也可以改为记录最新任何帧）
-			if strings.HasPrefix(cleaned, "ST,GS") || strings.HasPrefix(cleaned, "ST,NT") {
-				// TODO: 临时处理方案 - 当出现负值时返回0
-				// 前端目前无法正确处理负值情况，等前端修复后需要移除此处理逻辑
-				if strings.Contains(cleaned, "ST,GS-") {
-					cleaned = "ST,GS     0.0kg"
-				}
-				frameMutex.Lock()
-				latestStableFrame = cleaned
-				frameMutex.Unlock()
+			if strings.HasPrefix(readData, "ST,GS") || strings.HasPrefix(readData, "ST,NT") {
+				lastReadData.Store(readData)
 			}
 		}
 	}()
@@ -91,12 +85,11 @@ func InitSerial() {
 	go func() {
 		for {
 			time.Sleep(500 * time.Millisecond)
-			frameMutex.Lock()
-			if latestStableFrame != "" {
-				log.Println("推送:", latestStableFrame)
-				broadcast(latestStableFrame)
+			message := lastReadData.Load().(string)
+			if message != "" {
+				log.Println("推送:", lastReadData)
+				broadcast(message)
 			}
-			frameMutex.Unlock()
 		}
 	}()
 }

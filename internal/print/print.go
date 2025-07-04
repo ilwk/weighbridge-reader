@@ -13,11 +13,7 @@ import (
 )
 
 func PrintHandler(w http.ResponseWriter, r *http.Request) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		http.Error(w, "加载配置失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	cfg := config.LoadConfig()
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		http.Error(w, "解析表单失败: "+err.Error(), http.StatusBadRequest)

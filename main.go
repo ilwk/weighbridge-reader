@@ -11,10 +11,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cfg := config.LoadConfig()
 	go serial.InitSerial()
 	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
 	mux := http.NewServeMux()

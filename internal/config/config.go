@@ -2,8 +2,10 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"sync"
 )
 
 // 配置结构体
@@ -14,14 +16,35 @@ type Config struct {
 	PrinterName   string `json:"printer_name"`
 }
 
-func LoadConfig() (Config, error) {
-	var config Config
-	data, err := os.ReadFile("config.json")
-	if err != nil {
-		return config, fmt.Errorf("读取配置文件失败: %w", err)
-	}
-	if err := json.Unmarshal(data, &config); err != nil {
-		return config, fmt.Errorf("解析配置失败: %w", err)
-	}
-	return config, nil
+var defaultConfig = Config{
+	SerialPort:    "COM1",
+	BaudRate:      9600,
+	WebsocketPort: 9900,
+	PrinterName:   "BTP-2200E Plus(U) 1",
+}
+
+var (
+	instance *Config
+	once     sync.Once
+)
+
+func LoadConfig() *Config {
+	once.Do(func() {
+		path, _ := os.Executable()
+		dir := filepath.Dir(path)
+		configPath := filepath.Join(dir, "config.json")
+
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			log.Printf("没有找到配置文件，将使用默认配置")
+			instance = &defaultConfig
+			return
+		}
+		if err := json.Unmarshal(data, &instance); err != nil {
+			log.Printf("解析配置文件失败: %v", err)
+			instance = &defaultConfig
+			return
+		}
+	})
+	return instance
 }
