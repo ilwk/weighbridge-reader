@@ -14,4 +14,4 @@ ST,GS     0.0kg
 ST,GS     0.0kg
 ST,GS     0.0kg
 ST,GS     0.0kg
-ST,GS     0.0kg
+ST,GS-     0.0kg
