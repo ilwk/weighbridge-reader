@@ -3,93 +3,112 @@ package serial
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"log"
-	"net/http"
-	"reader/internal/config"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"go.bug.st/serial"
 )
 
-// WebSocket 管理
-var upgrader = websocket.Upgrader{}
-var clients = make(map[*websocket.Conn]bool)
-var mutex = &sync.Mutex{}
-
-func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("WebSocket 升级失败:", err)
-		return
-	}
-	mutex.Lock()
-	defer mutex.Unlock()
-	clients[conn] = true
-	log.Println("新的WebSocket客户端连接")
+type SerialManager struct {
+	ctx         context.Context
+	cancel      context.CancelFunc
+	lastMessage atomic.Value
+	mu          sync.Mutex
+	port        serial.Port
+	portName    string
+	baudRate    int
+	onMessage   func(string)
 }
 
-func broadcast(message string) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	for conn := range clients {
-		err := conn.WriteMessage(websocket.TextMessage, []byte(message))
+func NewSerialManager(port string, baud int, onMessage func(string)) *SerialManager {
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr := &SerialManager{
+		ctx:       ctx,
+		cancel:    cancel,
+		portName:  port,
+		baudRate:  baud,
+		onMessage: onMessage,
+	}
+	mgr.lastMessage.Store("")
+	return mgr
+}
+
+func (s *SerialManager) Start() {
+	go s.readLoop()
+	go s.pushLoop()
+}
+
+func (s *SerialManager) Stop() {
+	s.cancel()
+	if s.port != nil {
+		s.port.Close()
+	}
+}
+
+func (s *SerialManager) readLoop() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+		}
+
+		mode := &serial.Mode{BaudRate: s.baudRate}
+		port, err := serial.Open(s.portName, mode)
 		if err != nil {
-			log.Println("WebSocket 写入错误:", err)
-			conn.Close()
-			delete(clients, conn)
+			log.Println("[Serial] 打开失败，5秒后重试:", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		s.mu.Lock()
+		s.port = port
+		s.mu.Unlock()
+
+		log.Println("[Serial] 打开成功:", s.portName)
+		reader := bufio.NewReader(port)
+
+		for {
+			select {
+			case <-s.ctx.Done():
+				port.Close()
+				return
+			default:
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					log.Println("[Serial] 读取错误:", err)
+					break // 重新打开串口
+				}
+				readData := string(bytes.TrimSpace(line))
+				if readData == "" {
+					continue
+				}
+				if strings.HasPrefix(readData, "ST,GS-") {
+					readData = "ST,GS     0.0kg"
+				}
+				if strings.HasPrefix(readData, "ST,GS") || strings.HasPrefix(readData, "ST,NT") {
+					s.lastMessage.Store(readData)
+				}
+			}
 		}
 	}
 }
 
-var lastReadData atomic.Value
-
-func InitSerial() {
-	cfg := config.LoadConfig()
-	mode := &serial.Mode{BaudRate: cfg.BaudRate}
-	port, err := serial.Open(cfg.SerialPort, mode)
-	if err != nil {
-		log.Fatal("串口打开失败:", err)
+func (s *SerialManager) pushLoop() {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			val := s.lastMessage.Load()
+			if msg, ok := val.(string); ok && msg != "" && s.onMessage != nil {
+				s.onMessage(msg)
+			}
+		}
 	}
-	reader := bufio.NewReader(port)
-
-	// goroutine: 持续读取帧，缓存最新稳定帧
-	go func() {
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				log.Println("串口读取错误:", err)
-				continue
-			}
-			readData := string(bytes.TrimSpace(line))
-			if readData == "" {
-				continue
-			}
-
-			// 出现负数处理成0
-			if strings.Contains(readData, "ST,GS-") {
-				readData = "ST,GS     0.0kg"
-			}
-			// 只记录稳定帧（你也可以改为记录最新任何帧）
-			if strings.HasPrefix(readData, "ST,GS") || strings.HasPrefix(readData, "ST,NT") {
-				lastReadData.Store(readData)
-			}
-		}
-	}()
-
-	// goroutine: 每秒推送一次最新帧
-	go func() {
-		for {
-			time.Sleep(500 * time.Millisecond)
-			message := lastReadData.Load().(string)
-			if message != "" {
-				log.Println("推送:", lastReadData)
-				broadcast(message)
-			}
-		}
-	}()
 }

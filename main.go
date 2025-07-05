@@ -8,14 +8,22 @@ import (
 	"reader/internal/config"
 	"reader/internal/print"
 	"reader/internal/serial"
+	"reader/internal/ws"
 )
 
 func main() {
 	cfg := config.LoadConfig()
-	go serial.InitSerial()
+	hub := ws.NewHub()
+	manager := serial.NewSerialManager(cfg.SerialPort, cfg.BaudRate, func(msg string) {
+		log.Println("推送消息:", msg)
+		hub.Broadcast(msg)
+	})
+
+	manager.Start()
+	defer manager.Stop()
 	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", serial.HandleWebSocket)
+	mux.HandleFunc("/ws", hub.HandleWS)
 	mux.HandleFunc("/print", print.PrintHandler)
 	handler := withCORS(mux)
 	log.Printf("地磅读取服务已启动，运行在 http://localhost%s\n", addr)
