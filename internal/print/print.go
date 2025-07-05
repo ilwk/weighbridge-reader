@@ -1,78 +1,85 @@
 package print
 
 import (
+	"embed"
 	"fmt"
 	"io"
 	"log"
-	"mime/multipart"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reader/internal/config"
+	"sync"
 )
 
-func PrintHandler(w http.ResponseWriter, r *http.Request) {
-	cfg := config.LoadConfig()
+//go:embed assets/*
+var embeddedFiles embed.FS
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "解析表单失败: "+err.Error(), http.StatusBadRequest)
-		return
+var (
+	once    sync.Once
+	exePath string
+	exeDir  string
+	initErr error
+)
+
+// PrintPDF 使用嵌入的打印工具打印指定 PDF 文件
+func PrintPDF(pdfPath, printerName string) error {
+	if err := preparePrinterFiles(); err != nil {
+		return fmt.Errorf("初始化打印组件失败: %w", err)
 	}
 
-	// 获取文件
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "无法获取上传文件: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	defer file.Close()
-
-	printerName := r.FormValue("printer")
-
-	if printerName == "" {
-		printerName = cfg.PrinterName
-	}
-
-	// 保存为临时文件
-	tmpFilePath, err := saveTempFile(file, header.Filename)
-	if err != nil {
-		http.Error(w, "保存文件失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer os.Remove(tmpFilePath) // 打印后删除
-
-	args := []string{tmpFilePath}
-
+	args := []string{pdfPath}
 	if printerName != "" {
 		args = append(args, printerName)
 	}
 
-	fmt.Print("打印任务参数: ", args)
+	cmd := exec.Command(exePath, args...)
+	cmd.Dir = exeDir
 
-	cmd := exec.Command("./dll/PDFtoPrinterWin7.exe", args...)
-
-	// 执行打印命令
-	err = cmd.Run()
-	if err != nil {
-		log.Printf("Print command failed: %v\n", err)
-		http.Error(w, "Print failed", http.StatusInternalServerError)
-		return
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("打印执行失败: %w", err)
 	}
 
-	fmt.Fprintf(w, "打印任务发送成功: %s", tmpFilePath)
+	return nil
 }
 
-// 保存临时文件
-func saveTempFile(file multipart.File, filename string) (string, error) {
-	tmpPath := filepath.Join(os.TempDir(), filename)
+func preparePrinterFiles() error {
+	once.Do(func() {
+		exePath, initErr = extractFile("PDFtoPrinterWin7.exe")
+		if initErr != nil {
+			return
+		}
+		exeDir = filepath.Dir(exePath)
+
+		configTmpPath, err := extractFile("PDF-XChange Viewer Settings.dat")
+		if err != nil {
+			initErr = err
+			return
+		}
+		targetPath := filepath.Join(exeDir, "PDF-XChange Viewer Settings.dat")
+		_ = os.Rename(configTmpPath, targetPath)
+	})
+	return initErr
+}
+
+// extractFile 将 embed 中的资源释放为临时文件
+func extractFile(embeddedPath string) (string, error) {
+	data, err := embeddedFiles.Open("assets/" + embeddedPath)
+	if err != nil {
+		return "", err
+	}
+	defer data.Close()
+	log.Printf("释放 %s", os.TempDir())
+	tmpPath := filepath.Join(os.TempDir(), filepath.Base(embeddedPath))
 	out, err := os.Create(tmpPath)
 	if err != nil {
 		return "", err
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, file)
-	return tmpPath, err
+	_, err = io.Copy(out, data)
+	if err != nil {
+		return "", err
+	}
+
+	return tmpPath, nil
 }

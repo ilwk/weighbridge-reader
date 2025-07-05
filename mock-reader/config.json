@@ -4,17 +4,12 @@
     {
       "interval": 1000,
       "message": "ST,GS     0.0kg\r\n",
-      "repeat": 3
+      "repeat": 2
     },
     {
       "interval": 1000,
-      "message": "ST,GS     30.0kg\r\n",
-      "repeat": 3
-    },
-    {
-      "interval": 1000,
-      "message": "ST,GS     200.0kg\r\n",
-      "repeat": 3
+      "message": "ST,GS     550.0kg\r\n",
+      "repeat": 4
     },
     {
       "interval": 1000,
@@ -23,8 +18,8 @@
     },
     {
       "interval": 1000,
-      "message": "ST,GS    300.0kg\r\n",
-      "repeat": 3
+      "message": "ST,GS     200.0kg\r\n",
+      "repeat": 4
     }
   ]
 }

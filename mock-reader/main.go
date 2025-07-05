@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -72,8 +73,11 @@ func startWebSocketServer(config Config) {
 }
 
 func loadConfigFromFile(path string) (Config, error) {
+	currentPath, _ := os.Executable()
+	dir := filepath.Dir(currentPath)
+	configPath := filepath.Join(dir, path)
 	var config Config
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return config, fmt.Errorf("读取配置文件失败: %w", err)
 	}
@@ -84,9 +88,9 @@ func loadConfigFromFile(path string) (Config, error) {
 }
 
 func main() {
-	config, err := loadConfigFromFile("config.json")
+	config, err := loadConfigFromFile("./config.json")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	startWebSocketServer(config)
 }
