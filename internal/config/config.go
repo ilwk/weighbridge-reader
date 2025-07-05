@@ -36,15 +36,19 @@ func LoadConfig() *Config {
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			log.Printf("没有找到配置文件，将使用默认配置")
+			log.Printf("读取配置文件失败: %v，使用默认配置", err)
 			instance = &defaultConfig
 			return
 		}
-		if err := json.Unmarshal(data, &instance); err != nil {
+
+		temp := defaultConfig
+		if err := json.Unmarshal(data, &temp); err != nil {
 			log.Printf("解析配置文件失败: %v", err)
 			instance = &defaultConfig
 			return
 		}
+
+		instance = &temp
 	})
 	return instance
 }
