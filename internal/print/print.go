@@ -22,8 +22,46 @@ var (
 	initErr error
 )
 
-// PrintPDF 使用嵌入的打印工具打印指定 PDF 文件
-func PrintPDF(pdfPath, printerName string) error {
+// PrintPDF 使用嵌入的打印工具打印指定 PDF 文件内容
+func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
+	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
+
+	if err := preparePrinterFiles(); err != nil {
+		return fmt.Errorf("初始化打印组件失败: %w", err)
+	}
+
+	// 保存文件内容到临时文件
+	tmpPDFPath, err := saveTempPDF(pdfContent, filename)
+	if err != nil {
+		return fmt.Errorf("保存临时文件失败: %w", err)
+	}
+	defer os.Remove(tmpPDFPath)
+
+	args := []string{tmpPDFPath}
+	if printerName != "" {
+		args = append(args, printerName)
+	}
+
+	cmd := exec.Command(exePath, args...)
+	cmd.Dir = exeDir
+
+	// 设置超时时间，避免打印任务卡死
+	// cmd.Timeout = 30 * time.Second
+
+	startTime := time.Now()
+	if err := cmd.Run(); err != nil {
+		log.Printf("打印失败: %s, 错误: %v", filename, err)
+		return fmt.Errorf("打印执行失败: %w", err)
+	}
+
+	duration := time.Since(startTime)
+	log.Printf("打印完成: %s, 耗时: %v", filename, duration)
+
+	return nil
+}
+
+// PrintPDFFromPath 从文件路径打印 PDF（保持向后兼容）
+func PrintPDFFromPath(pdfPath, printerName string) error {
 	log.Printf("开始打印文件: %s, 打印机: %s", pdfPath, printerName)
 
 	if err := preparePrinterFiles(); err != nil {
@@ -94,6 +132,32 @@ func extractFile(embeddedPath string) (string, error) {
 
 	_, err = io.Copy(out, data)
 	if err != nil {
+		return "", err
+	}
+
+	return tmpPath, nil
+}
+
+// saveTempPDF 保存文件内容到临时目录，使用唯一文件名避免并发冲突
+func saveTempPDF(content io.Reader, filename string) (string, error) {
+	ext := filepath.Ext(filename)
+	name := filepath.Base(filename)
+	if ext == "" {
+		name += ".pdf"
+	}
+
+	// 添加时间戳和随机数确保文件名唯一
+	timestamp := time.Now().UnixNano()
+	uniqueName := fmt.Sprintf("%d_%s", timestamp, name)
+	tmpPath := filepath.Join(os.TempDir(), uniqueName)
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, content); err != nil {
 		return "", err
 	}
 

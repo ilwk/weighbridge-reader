@@ -25,8 +25,6 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", hub.HandleWS)
 	mux.HandleFunc("/print", print.PrintHandler)
-	mux.HandleFunc("/print/status", print.StatusHandler)
-	mux.HandleFunc("/print/queue", print.QueueStatusHandler)
 	handler := withCORS(mux)
 	log.Printf("地磅读取服务已启动，运行在 http://localhost%s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, handler))
