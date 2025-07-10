@@ -26,7 +26,7 @@ var (
 func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
 
-	if err := preparePrinterFiles(); err != nil {
+	if err := initPrintCMD(); err != nil {
 		return fmt.Errorf("初始化打印组件失败: %w", err)
 	}
 
@@ -45,9 +45,6 @@ func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = exeDir
 
-	// 设置超时时间，避免打印任务卡死
-	// cmd.Timeout = 30 * time.Second
-
 	startTime := time.Now()
 	if err := cmd.Run(); err != nil {
 		log.Printf("打印失败: %s, 错误: %v", filename, err)
@@ -56,42 +53,11 @@ func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
 
 	duration := time.Since(startTime)
 	log.Printf("打印完成: %s, 耗时: %v", filename, duration)
-
+	log.Printf("tmpPDFPath: %s", tmpPDFPath)
 	return nil
 }
 
-// PrintPDFFromPath 从文件路径打印 PDF（保持向后兼容）
-func PrintPDFFromPath(pdfPath, printerName string) error {
-	log.Printf("开始打印文件: %s, 打印机: %s", pdfPath, printerName)
-
-	if err := preparePrinterFiles(); err != nil {
-		return fmt.Errorf("初始化打印组件失败: %w", err)
-	}
-
-	args := []string{pdfPath}
-	if printerName != "" {
-		args = append(args, printerName)
-	}
-
-	cmd := exec.Command(exePath, args...)
-	cmd.Dir = exeDir
-
-	// 设置超时时间，避免打印任务卡死
-	// cmd.Timeout = 30 * time.Second
-
-	startTime := time.Now()
-	if err := cmd.Run(); err != nil {
-		log.Printf("打印失败: %s, 错误: %v", pdfPath, err)
-		return fmt.Errorf("打印执行失败: %w", err)
-	}
-
-	duration := time.Since(startTime)
-	log.Printf("打印完成: %s, 耗时: %v", pdfPath, duration)
-
-	return nil
-}
-
-func preparePrinterFiles() error {
+func initPrintCMD() error {
 	once.Do(func() {
 		log.Println("初始化打印组件...")
 		exePath, initErr = extractFile("PDFtoPrinterWin7.exe")
