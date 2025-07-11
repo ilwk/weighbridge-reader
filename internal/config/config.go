@@ -20,7 +20,7 @@ var defaultConfig = Config{
 	SerialPort:    "COM1",
 	BaudRate:      9600,
 	WebsocketPort: 9900,
-	PrinterName:   "BTP-2200E Plus(U) 1",
+	PrinterName:   "",
 }
 
 var (

@@ -22,39 +22,40 @@ var (
 	initErr error
 )
 
-// PrintPDF 使用嵌入的打印工具打印指定 PDF 文件内容
+type printTask struct {
+	pdfContent  io.Reader
+	filename    string
+	printerName string
+	resultChan  chan error
+}
+
+var (
+	printQueue chan printTask
+	queueOnce  sync.Once
+)
+
+func startPrintWorker() {
+	printQueue = make(chan printTask, 100) // 队列长度可根据需求调整
+	go func() {
+		for task := range printQueue {
+			err := doPrintPDF(task.pdfContent, task.filename, task.printerName)
+			task.resultChan <- err
+			close(task.resultChan)
+		}
+	}()
+}
+
+// PrintPDF 使用嵌入的打印工具打印指定 PDF 文件内容（队列版）
 func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
-	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
-
-	if err := initPrintCMD(); err != nil {
-		return fmt.Errorf("初始化打印组件失败: %w", err)
+	queueOnce.Do(startPrintWorker)
+	resultChan := make(chan error, 1)
+	printQueue <- printTask{
+		pdfContent:  pdfContent,
+		filename:    filename,
+		printerName: printerName,
+		resultChan:  resultChan,
 	}
-
-	// 保存文件内容到临时文件
-	tmpPDFPath, err := saveTempPDF(pdfContent, filename)
-	if err != nil {
-		return fmt.Errorf("保存临时文件失败: %w", err)
-	}
-	defer os.Remove(tmpPDFPath)
-
-	args := []string{tmpPDFPath}
-	if printerName != "" {
-		args = append(args, printerName)
-	}
-
-	cmd := exec.Command(exePath, args...)
-	cmd.Dir = exeDir
-
-	startTime := time.Now()
-	if err := cmd.Run(); err != nil {
-		log.Printf("打印失败: %s, 错误: %v", filename, err)
-		return fmt.Errorf("打印执行失败: %w", err)
-	}
-
-	duration := time.Since(startTime)
-	log.Printf("打印完成: %s, 耗时: %v", filename, duration)
-	log.Printf("tmpPDFPath: %s", tmpPDFPath)
-	return nil
+	return <-resultChan
 }
 
 func initPrintCMD() error {
@@ -79,6 +80,42 @@ func initPrintCMD() error {
 		log.Println("打印组件初始化完成")
 	})
 	return initErr
+}
+
+// doPrintPDF 负责实际的打印逻辑
+func doPrintPDF(pdfContent io.Reader, filename, printerName string) error {
+	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
+
+	if err := initPrintCMD(); err != nil {
+		return fmt.Errorf("初始化打印组件失败: %w", err)
+	}
+
+	// 保存文件内容到临时文件
+	tmpPDFPath, err := saveTempPDF(pdfContent, filename)
+	if err != nil {
+		return fmt.Errorf("保存临时文件失败: %w", err)
+	}
+	defer os.Remove(tmpPDFPath)
+
+	args := []string{tmpPDFPath}
+	if printerName != "" {
+		// 用双引号包裹打印机名称，防止空格导致的问题
+		args = append(args, fmt.Sprintf("\"%s\"", printerName))
+	}
+
+	cmd := exec.Command(exePath, args...)
+	cmd.Dir = exeDir
+
+	startTime := time.Now()
+	if err := cmd.Run(); err != nil {
+		log.Printf("打印失败: %s, 错误: %v", filename, err)
+		return fmt.Errorf("打印执行失败: %w", err)
+	}
+
+	duration := time.Since(startTime)
+	log.Printf("打印完成: %s, 耗时: %v", filename, duration)
+	log.Printf("tmpPDFPath: %s", tmpPDFPath)
+	return nil
 }
 
 // extractFile 将 embed 中的资源释放为临时文件
