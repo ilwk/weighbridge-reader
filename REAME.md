@@ -71,3 +71,7 @@ Get-Printer | Select-Object Name
 ```
 
 ### 命令行打印
+
+```powershell
+Start-Process -FilePath "./test-16.pdf" -Verb Print -PassThru | %{sleep 10;$_} | kill
+```

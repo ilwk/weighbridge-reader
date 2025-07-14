@@ -1,7 +1,6 @@
 package print
 
 import (
-	"embed"
 	"fmt"
 	"io"
 	"log"
@@ -11,9 +10,6 @@ import (
 	"sync"
 	"time"
 )
-
-//go:embed assets/*
-var embeddedFiles embed.FS
 
 var (
 	once    sync.Once
@@ -58,53 +54,24 @@ func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	return <-resultChan
 }
 
-func initPrintCMD() error {
-	once.Do(func() {
-		log.Println("初始化打印组件...")
-		exePath, initErr = extractFile("PDFtoPrinterWin7.exe")
-		if initErr != nil {
-			log.Printf("提取打印工具失败: %v", initErr)
-			return
-		}
-		exeDir = filepath.Dir(exePath)
-		log.Printf("打印工具路径: %s", exePath)
-
-		configTmpPath, err := extractFile("PDF-XChange Viewer Settings.dat")
-		if err != nil {
-			initErr = err
-			log.Printf("提取配置文件失败: %v", err)
-			return
-		}
-		targetPath := filepath.Join(exeDir, "PDF-XChange Viewer Settings.dat")
-		_ = os.Rename(configTmpPath, targetPath)
-		log.Println("打印组件初始化完成")
-	})
-	return initErr
-}
-
 // doPrintPDF 负责实际的打印逻辑
 func doPrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
-
-	if err := initPrintCMD(); err != nil {
-		return fmt.Errorf("初始化打印组件失败: %w", err)
-	}
 
 	// 保存文件内容到临时文件
 	tmpPDFPath, err := saveTempPDF(pdfContent, filename)
 	if err != nil {
 		return fmt.Errorf("保存临时文件失败: %w", err)
 	}
-	defer os.Remove(tmpPDFPath)
-
+	// 创建执行PowerShell的命令
 	args := []string{tmpPDFPath}
 	if printerName != "" {
 		// 用双引号包裹打印机名称，防止空格导致的问题
 		args = append(args, fmt.Sprintf("\"%s\"", printerName))
 	}
 
-	cmd := exec.Command(exePath, args...)
-	cmd.Dir = exeDir
+	cmd := exec.Command("./assets/PDFtoPrinterWin7.exe", args...)
+	// 输出结果
 
 	startTime := time.Now()
 	if err := cmd.Run(); err != nil {
@@ -114,31 +81,8 @@ func doPrintPDF(pdfContent io.Reader, filename, printerName string) error {
 
 	duration := time.Since(startTime)
 	log.Printf("打印完成: %s, 耗时: %v", filename, duration)
-	log.Printf("tmpPDFPath: %s", tmpPDFPath)
+	defer os.Remove(tmpPDFPath)
 	return nil
-}
-
-// extractFile 将 embed 中的资源释放为临时文件
-func extractFile(embeddedPath string) (string, error) {
-	data, err := embeddedFiles.Open("assets/" + embeddedPath)
-	if err != nil {
-		return "", err
-	}
-	defer data.Close()
-
-	tmpPath := filepath.Join(os.TempDir(), filepath.Base(embeddedPath))
-	out, err := os.Create(tmpPath)
-	if err != nil {
-		return "", err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, data)
-	if err != nil {
-		return "", err
-	}
-
-	return tmpPath, nil
 }
 
 // saveTempPDF 保存文件内容到临时目录，使用唯一文件名避免并发冲突
