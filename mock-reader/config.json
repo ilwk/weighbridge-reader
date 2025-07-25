@@ -2,23 +2,28 @@
   "port": 9900,
   "messages": [
     {
-      "interval": 1000,
-      "message": "ST,GS     0.0kg\r\n",
-      "repeat": 2
-    },
-    {
-      "interval": 1000,
-      "message": "ST,GS     550.0kg\r\n",
-      "repeat": 4
-    },
-    {
-      "interval": 1000,
+      "interval": 500,
       "message": "ST,GS     0.0kg\r\n",
       "repeat": 1
     },
     {
-      "interval": 1000,
-      "message": "ST,GS     200.0kg\r\n",
+      "interval": 500,
+      "message": "ST,GS     31.12kg\r\n",
+      "repeat": 1
+    },
+    {
+      "interval": 500,
+      "message": "ST,GS     31.13kg\r\n",
+      "repeat": 1
+    },
+    {
+      "interval": 500,
+      "message": "ST,GS     31.12kg\r\n",
+      "repeat": 1
+    },
+    {
+      "interval": 500,
+      "message": "ST,GS     31.13kg\r\n",
       "repeat": 4
     }
   ]

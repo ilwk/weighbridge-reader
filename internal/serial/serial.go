@@ -104,7 +104,6 @@ func (s *SerialManager) pushLoop() {
 		case <-ticker.C:
 			val := s.lastMessage.Load()
 			if msg, ok := val.(string); ok && msg != "" && s.onMessage != nil {
-				log.Printf("[Serial] 推送消息: %s", msg)
 				s.onMessage(msg)
 			}
 		}

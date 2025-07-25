@@ -31,26 +31,53 @@ func handleConnection(conn *websocket.Conn, messages []MessageConfig) {
 	defer conn.Close()
 	log.Println("客户端已连接")
 
+	// 用于通知推送循环退出
+	done := make(chan struct{})
+
+	// 读消息 goroutine，及时检测客户端断开
+	go func() {
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				log.Println("检测到客户端断开:", err)
+				close(done)
+				return
+			}
+		}
+	}()
+
+	// 推送循环
 	for {
 		for _, msg := range messages {
 			times := msg.Repeat
 			if times == 0 {
 				// 无限重复此消息
 				for {
-					if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Message)); err != nil {
-						log.Println("发送失败:", err)
+					select {
+					case <-done:
+						log.Println("推送循环收到退出信号")
 						return
+					default:
+						if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Message)); err != nil {
+							log.Println("发送失败:", err)
+							return
+						}
+						time.Sleep(time.Duration(msg.Interval) * time.Millisecond)
 					}
-					time.Sleep(time.Duration(msg.Interval) * time.Millisecond)
 				}
 			} else {
 				// 重复指定次数
 				for i := 0; i < times; i++ {
-					if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Message)); err != nil {
-						log.Println("发送失败:", err)
+					select {
+					case <-done:
+						log.Println("推送循环收到退出信号")
 						return
+					default:
+						if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Message)); err != nil {
+							log.Println("发送失败:", err)
+							return
+						}
+						time.Sleep(time.Duration(msg.Interval) * time.Millisecond)
 					}
-					time.Sleep(time.Duration(msg.Interval) * time.Millisecond)
 				}
 			}
 		}
