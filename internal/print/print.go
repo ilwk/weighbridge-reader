@@ -1,6 +1,7 @@
 package print
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -54,12 +55,65 @@ func PrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	return <-resultChan
 }
 
+// SavePDFToHistory 保存PDF到history目录，重名自动累加
+func SavePDFToHistory(content io.Reader, filename string) (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("获取可执行文件路径失败: %w", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	historyDir := filepath.Join(exeDir, "history")
+	if _, err := os.Stat(historyDir); os.IsNotExist(err) {
+		err = os.Mkdir(historyDir, 0755)
+		if err != nil {
+			return "", fmt.Errorf("创建history目录失败: %w", err)
+		}
+	}
+	// 处理重名
+	base := filepath.Base(filename)
+	ext := filepath.Ext(base)
+	name := base[:len(base)-len(ext)]
+	if ext == "" {
+		ext = ".pdf"
+	}
+	historyPath := filepath.Join(historyDir, base)
+	idx := 1
+	for {
+		if _, err := os.Stat(historyPath); os.IsNotExist(err) {
+			break
+		}
+		historyPath = filepath.Join(historyDir, fmt.Sprintf("%s(%d)%s", name, idx, ext))
+		idx++
+	}
+	out, err := os.Create(historyPath)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, content); err != nil {
+		return "", err
+	}
+	return historyPath, nil
+}
+
 // doPrintPDF 负责实际的打印逻辑
 func doPrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	log.Printf("开始打印文件: %s, 打印机: %s", filename, printerName)
 
+	// 先把内容全部读到内存
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, pdfContent); err != nil {
+		return fmt.Errorf("读取PDF内容失败: %w", err)
+	}
+
+	// 保存一份历史记录
+	_, _ = SavePDFToHistory(bytes.NewReader(buf.Bytes()), filename)
+
+	// 用于打印的内容
+	printReader := bytes.NewReader(buf.Bytes())
+
 	// 保存文件内容到临时文件
-	tmpPDFPath, err := saveTempPDF(pdfContent, filename)
+	tmpPDFPath, err := saveTempPDF(printReader, filename)
 	if err != nil {
 		return fmt.Errorf("保存临时文件失败: %w", err)
 	}

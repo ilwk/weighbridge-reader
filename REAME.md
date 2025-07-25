@@ -75,3 +75,10 @@ Get-Printer | Select-Object Name
 ```powershell
 Start-Process -FilePath "./test-16.pdf" -Verb Print -PassThru | %{sleep 10;$_} | kill
 ```
+
+## 历史PDF保存说明
+
+- 每次打印的PDF文件，系统会自动保存一份到可执行文件同目录下的 `history` 文件夹。
+- 文件名为传入的原始名称，若重名则自动累加（如 `a.pdf`、`a(1).pdf`、`a(2).pdf`）。
+- `history` 文件夹会自动创建，无需手动操作。
+- 该功能便于后续查找、追溯历史打印记录。
