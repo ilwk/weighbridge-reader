@@ -1,11 +1,11 @@
 package ws
 
 import (
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/sirupsen/logrus"
 )
 
 var upgrader = websocket.Upgrader{
@@ -28,16 +28,23 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("[WebSocket] 升级失败:", err)
+		logrus.WithFields(logrus.Fields{
+			"module": "WebSocket",
+			"error":  err,
+		}).Error("连接升级失败")
 		return
 	}
 
 	ch := make(chan string, 10)
 	h.lock.Lock()
 	h.clients[conn] = ch
+	clientCount := len(h.clients)
 	h.lock.Unlock()
 
-	log.Println("[WebSocket] 新客户端连接")
+	logrus.WithFields(logrus.Fields{
+		"module":      "WebSocket",
+		"clientCount": clientCount,
+	}).Info("新客户端连接")
 
 	// 只用一个goroutine处理发送消息
 	go func() {
@@ -45,15 +52,28 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 			h.lock.Lock()
 			close(ch)
 			delete(h.clients, conn)
+			remainingCount := len(h.clients)
 			h.lock.Unlock()
-			conn.Close()
-			log.Println("[WebSocket] 客户端连接已断开")
+			
+			if err := conn.Close(); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"module": "WebSocket",
+					"error":  err,
+				}).Warn("关闭连接时出错")
+			}
+			logrus.WithFields(logrus.Fields{
+				"module":         "WebSocket",
+				"remainingCount": remainingCount,
+			}).Info("客户端连接已断开")
 		}()
 
 		for msg := range ch {
 			err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
 			if err != nil {
-				log.Println("[WebSocket] 写入失败:", err)
+				logrus.WithFields(logrus.Fields{
+					"module": "WebSocket",
+					"error":  err,
+				}).Error("写入消息失败")
 				return
 			}
 		}
@@ -70,16 +90,45 @@ func (h *Hub) Broadcast(msg string) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	
+	if len(h.clients) == 0 {
+		return // 没有客户端连接，直接返回
+	}
+	
+	var slowClients []*websocket.Conn
+	
 	for conn, ch := range h.clients {
 		select {
 		case ch <- msg:
 			// 成功发送
 		default:
-			// 缓冲区满，移除慢客户端
-			log.Println("[WebSocket] 推送缓冲满，移除慢客户端")
+			// 缓冲区满，标记为慢客户端
+			slowClients = append(slowClients, conn)
+		}
+	}
+	
+	// 批量处理慢客户端，避免在锁内进行网络操作
+	for _, conn := range slowClients {
+		if ch, exists := h.clients[conn]; exists {
+			logrus.WithField("module", "WebSocket").Warn("客户端响应缓慢，移除连接")
 			close(ch)
 			delete(h.clients, conn)
-			conn.Close()
+			// 异步关闭连接，避免阻塞
+			go func(c *websocket.Conn) {
+				if err := c.Close(); err != nil {
+					logrus.WithFields(logrus.Fields{
+						"module": "WebSocket",
+						"error":  err,
+					}).Warn("关闭慢客户端连接时出错")
+				}
+			}(conn)
 		}
+	}
+	
+	if len(slowClients) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"module":       "WebSocket",
+			"removedCount": len(slowClients),
+			"currentCount": len(h.clients),
+		}).Warn("移除慢客户端")
 	}
 }
