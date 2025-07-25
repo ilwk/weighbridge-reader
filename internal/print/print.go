@@ -63,15 +63,21 @@ func doPrintPDF(pdfContent io.Reader, filename, printerName string) error {
 	if err != nil {
 		return fmt.Errorf("保存临时文件失败: %w", err)
 	}
-	// 创建执行PowerShell的命令
+
+	// 获取可执行文件所在目录，拼接 assets 路径
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("获取可执行文件路径失败: %w", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	printerExePath := filepath.Join(exeDir, "assets", "PDFtoPrinterWin7.exe")
+
 	args := []string{tmpPDFPath}
 	if printerName != "" {
-		// 用双引号包裹打印机名称，防止空格导致的问题
 		args = append(args, fmt.Sprintf("\"%s\"", printerName))
 	}
 
-	cmd := exec.Command("./assets/PDFtoPrinterWin7.exe", args...)
-	// 输出结果
+	cmd := exec.Command(printerExePath, args...)
 
 	startTime := time.Now()
 	if err := cmd.Run(); err != nil {

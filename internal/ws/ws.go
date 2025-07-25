@@ -24,6 +24,8 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("[WebSocket] 升级失败:", err)

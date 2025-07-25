@@ -9,6 +9,8 @@ import (
 
 // PrintHandler 是 HTTP 上传和打印的入口
 func PrintHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	cfg := config.LoadConfig()
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
