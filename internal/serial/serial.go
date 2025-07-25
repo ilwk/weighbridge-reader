@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"log"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,12 +85,7 @@ func (s *SerialManager) readLoop() {
 				if readData == "" {
 					continue
 				}
-				if strings.HasPrefix(readData, "ST,GS-") {
-					readData = "ST,GS     0.0kg"
-				}
-				if strings.HasPrefix(readData, "ST,GS") || strings.HasPrefix(readData, "ST,NT") {
-					s.lastMessage.Store(readData)
-				}
+				s.lastMessage.Store(readData)
 			}
 		}
 	}

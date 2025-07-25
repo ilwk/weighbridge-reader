@@ -10,6 +10,7 @@ require (
 
 require (
 	github.com/creack/goselect v0.1.2 // indirect
+	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 )
