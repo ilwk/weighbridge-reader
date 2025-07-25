@@ -14,7 +14,7 @@ var upgrader = websocket.Upgrader{
 
 type Hub struct {
 	clients map[*websocket.Conn]chan string
-	lock    sync.Mutex
+	lock    sync.RWMutex
 }
 
 func NewHub() *Hub {
@@ -31,6 +31,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		log.Println("[WebSocket] 升级失败:", err)
 		return
 	}
+
 	ch := make(chan string, 10)
 	h.lock.Lock()
 	h.clients[conn] = ch
@@ -38,13 +39,17 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("[WebSocket] 新客户端连接")
 
+	// 只用一个goroutine处理发送消息
 	go func() {
 		defer func() {
-			conn.Close()
 			h.lock.Lock()
+			close(ch)
 			delete(h.clients, conn)
 			h.lock.Unlock()
+			conn.Close()
+			log.Println("[WebSocket] 客户端连接已断开")
 		}()
+
 		for msg := range ch {
 			err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
 			if err != nil {
@@ -55,14 +60,26 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func (h *Hub) GetClientCount() int {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return len(h.clients)
+}
+
 func (h *Hub) Broadcast(msg string) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	for _, ch := range h.clients {
+	
+	for conn, ch := range h.clients {
 		select {
 		case ch <- msg:
+			// 成功发送
 		default:
-			log.Println("[WebSocket] 推送缓冲满，跳过")
+			// 缓冲区满，移除慢客户端
+			log.Println("[WebSocket] 推送缓冲满，移除慢客户端")
+			close(ch)
+			delete(h.clients, conn)
+			conn.Close()
 		}
 	}
 }
