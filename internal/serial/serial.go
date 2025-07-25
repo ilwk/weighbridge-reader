@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -85,7 +86,9 @@ func (s *SerialManager) readLoop() {
 				if readData == "" {
 					continue
 				}
-				s.lastMessage.Store(readData)
+				if strings.HasPrefix(readData, "ST,GS") {
+					s.lastMessage.Store(readData)
+				}
 			}
 		}
 	}
@@ -101,6 +104,7 @@ func (s *SerialManager) pushLoop() {
 		case <-ticker.C:
 			val := s.lastMessage.Load()
 			if msg, ok := val.(string); ok && msg != "" && s.onMessage != nil {
+				log.Printf("[Serial] 推送消息: %s", msg)
 				s.onMessage(msg)
 			}
 		}
