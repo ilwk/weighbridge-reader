@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,18 +36,18 @@ var (
 func startPrintWorker() {
 	printQueue = make(chan printTask, 100) // 队列长度可根据需求调整
 	logrus.WithField("module", "Print").Info("启动打印队列处理器")
-	
+
 	go func() {
 		for task := range printQueue {
 			logrus.WithFields(logrus.Fields{
 				"module":   "Print",
 				"filename": task.filename,
 			}).Info("处理打印任务")
-			
+
 			err := doPrintPDF(task.pdfContent, task.filename, task.printerName)
 			task.resultChan <- err
 			close(task.resultChan)
-			
+
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"module":   "Print",
@@ -85,7 +86,7 @@ func SavePDFToHistory(content io.Reader, filename string) (string, error) {
 	}
 	exeDir := filepath.Dir(exePath)
 	historyDir := filepath.Join(exeDir, "history")
-	
+
 	// 确保history目录存在
 	if _, err := os.Stat(historyDir); os.IsNotExist(err) {
 		if err = os.MkdirAll(historyDir, 0755); err != nil {
@@ -93,7 +94,7 @@ func SavePDFToHistory(content io.Reader, filename string) (string, error) {
 		}
 		log.Printf("[Print] 创建history目录: %s", historyDir)
 	}
-	
+
 	// 处理重名
 	base := filepath.Base(filename)
 	ext := filepath.Ext(base)
@@ -101,7 +102,7 @@ func SavePDFToHistory(content io.Reader, filename string) (string, error) {
 	if ext == "" {
 		ext = ".pdf"
 	}
-	
+
 	historyPath := filepath.Join(historyDir, base)
 	idx := 1
 	for {
@@ -111,17 +112,17 @@ func SavePDFToHistory(content io.Reader, filename string) (string, error) {
 		historyPath = filepath.Join(historyDir, fmt.Sprintf("%s(%d)%s", name, idx, ext))
 		idx++
 	}
-	
+
 	out, err := os.Create(historyPath)
 	if err != nil {
 		return "", fmt.Errorf("创建历史文件失败: %w", err)
 	}
 	defer out.Close()
-	
+
 	if _, err := io.Copy(out, content); err != nil {
 		return "", fmt.Errorf("写入历史文件失败: %w", err)
 	}
-	
+
 	return historyPath, nil
 }
 

@@ -54,7 +54,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 			delete(h.clients, conn)
 			remainingCount := len(h.clients)
 			h.lock.Unlock()
-			
+
 			if err := conn.Close(); err != nil {
 				logrus.WithFields(logrus.Fields{
 					"module": "WebSocket",
@@ -74,7 +74,9 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 					"module": "WebSocket",
 					"error":  err,
 				}).Error("写入消息失败")
-				return
+				// 不直接返回，而是继续处理其他消息
+				// 连接会在defer中正确关闭
+				break
 			}
 		}
 	}()
@@ -89,27 +91,27 @@ func (h *Hub) GetClientCount() int {
 func (h *Hub) Broadcast(msg string) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	
+
 	if len(h.clients) == 0 {
 		return // 没有客户端连接，直接返回
 	}
-	
-	var slowClients []*websocket.Conn
-	
+
+	var closedClients []*websocket.Conn
+
 	for conn, ch := range h.clients {
 		select {
 		case ch <- msg:
 			// 成功发送
 		default:
-			// 缓冲区满，标记为慢客户端
-			slowClients = append(slowClients, conn)
+			// 缓冲区满或连接已关闭，标记为需要关闭的客户端
+			closedClients = append(closedClients, conn)
 		}
 	}
-	
-	// 批量处理慢客户端，避免在锁内进行网络操作
-	for _, conn := range slowClients {
+
+	// 批量处理需要关闭的客户端，避免在锁内进行网络操作
+	for _, conn := range closedClients {
 		if ch, exists := h.clients[conn]; exists {
-			logrus.WithField("module", "WebSocket").Warn("客户端响应缓慢，移除连接")
+			logrus.WithField("module", "WebSocket").Warn("客户端连接异常，移除连接")
 			close(ch)
 			delete(h.clients, conn)
 			// 异步关闭连接，避免阻塞
@@ -118,17 +120,17 @@ func (h *Hub) Broadcast(msg string) {
 					logrus.WithFields(logrus.Fields{
 						"module": "WebSocket",
 						"error":  err,
-					}).Warn("关闭慢客户端连接时出错")
+					}).Warn("关闭异常客户端连接时出错")
 				}
 			}(conn)
 		}
 	}
-	
-	if len(slowClients) > 0 {
+
+	if len(closedClients) > 0 {
 		logrus.WithFields(logrus.Fields{
 			"module":       "WebSocket",
-			"removedCount": len(slowClients),
+			"removedCount": len(closedClients),
 			"currentCount": len(h.clients),
-		}).Warn("移除慢客户端")
+		}).Warn("移除异常客户端")
 	}
 }
