@@ -46,7 +46,24 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		"clientCount": clientCount,
 	}).Info("新客户端连接")
 
-	// 只用一个goroutine处理发送消息
+	// 用于通知发送goroutine退出
+	done := make(chan struct{})
+
+	// 读消息goroutine，及时检测客户端断开
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"module": "WebSocket",
+					"error":  err,
+				}).Debug("检测到客户端断开")
+				return
+			}
+		}
+	}()
+
+	// 发送消息goroutine
 	go func() {
 		defer func() {
 			h.lock.Lock()
@@ -67,16 +84,21 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 			}).Info("客户端连接已断开")
 		}()
 
-		for msg := range ch {
-			err := conn.WriteMessage(websocket.TextMessage, []byte(msg))
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"module": "WebSocket",
-					"error":  err,
-				}).Error("写入消息失败")
-				// 不直接返回，而是继续处理其他消息
-				// 连接会在defer中正确关闭
-				break
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+					logrus.WithFields(logrus.Fields{
+						"module": "WebSocket",
+						"error":  err,
+					}).Error("写入消息失败")
+					return
+				}
+			case <-done:
+				return
 			}
 		}
 	}()
