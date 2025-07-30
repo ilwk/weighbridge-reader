@@ -7,16 +7,19 @@
   "broadcast_interval": 500,
   "mock_messages": [
     {
-      "message": "ST,GS     0.0kg\r\n",
-      "interval": 500
+      "message": "ST,GS,+000.000kg"
     },
     {
-      "message": "ST,GS     31.12kg\r\n",
-      "interval": 500
+      "message": "ST,GS,+001.234kg" 
     },
     {
-      "message": "ST,GS     0.0kg\r\n",
-      "interval": 800
+      "message": "ST,GS,+002.567kg"
+    },
+    {
+      "message": "ST,GS,+001.890kg"
+    },
+    {
+      "message": "ST,GS,+000.000kg"
     }
   ]
 }

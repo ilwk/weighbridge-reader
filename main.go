@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,6 +52,38 @@ func initLogger() {
 	logrus.SetLevel(logrus.InfoLevel)
 }
 
+// 模拟数据生成器
+func startMockDataGenerator(ctx context.Context, cfg *config.Config, callback func(string)) {
+	go func() {
+		logrus.WithFields(logrus.Fields{
+			"module":   "MOCK",
+			"interval": time.Duration(cfg.BroadcastInterval) * time.Millisecond,
+		}).Info("模拟数据生成器启动")
+		
+		ticker := time.NewTicker(time.Duration(cfg.BroadcastInterval) * time.Millisecond)
+		defer ticker.Stop()
+		
+		msgIndex := 0
+		for {
+			select {
+			case <-ctx.Done():
+				logrus.WithField("module", "MOCK").Info("模拟数据生成器停止")
+				return
+			case <-ticker.C:
+				if len(cfg.MockMessages) > 0 {
+					msg := cfg.MockMessages[msgIndex%len(cfg.MockMessages)]
+					logrus.WithFields(logrus.Fields{
+						"module": "MOCK",
+						"data":   msg.Message,
+					}).Debug("生成模拟数据")
+					callback(msg.Message)
+					msgIndex++
+				}
+			}
+		}
+	}()
+}
+
 func main() {
 	initLogger()
 	cfg := config.LoadConfig()
@@ -59,18 +92,48 @@ func main() {
 		"module": "MAIN",
 	}).Info("地磅读取服务启动中...")
 	
+	var modeStr string
+	if cfg.MockMode {
+		modeStr = "模拟模式"
+	} else {
+		modeStr = "串口模式"
+	}
+	
 	fmt.Printf("地磅读取服务启动中...\n")
-	fmt.Printf("配置信息 - 串口: %s, 波特率: %d, WebSocket端口: %d\n", 
-		cfg.SerialPort, cfg.BaudRate, cfg.WebsocketPort)
+	fmt.Printf("运行模式: %s\n", modeStr)
+	if cfg.MockMode {
+		fmt.Printf("配置信息 - WebSocket端口: %d, 模拟消息数: %d, 推送间隔: %dms\n", 
+			cfg.WebsocketPort, len(cfg.MockMessages), cfg.BroadcastInterval)
+	} else {
+		fmt.Printf("配置信息 - 串口: %s, 波特率: %d, WebSocket端口: %d, 推送间隔: %dms\n", 
+			cfg.SerialPort, cfg.BaudRate, cfg.WebsocketPort, cfg.BroadcastInterval)
+	}
 	
 	hub := ws.NewHub()
-	manager := serial.NewSerialManager(cfg.SerialPort, cfg.BaudRate, func(msg string) {
+	dataCallback := func(msg string) {
 		logrus.WithFields(logrus.Fields{
 			"module": "MAIN",
 			"data":   msg,
 		}).Debug("推送消息")
 		hub.Broadcast(msg)
-	})
+	}
+
+	// 用于控制模拟数据生成器的上下文
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var manager *serial.SerialManager
+	if cfg.MockMode {
+		// 启动模拟数据生成器
+		startMockDataGenerator(ctx, cfg, dataCallback)
+		logrus.WithField("module", "MAIN").Info("模拟数据生成器已启动")
+	} else {
+		// 启动串口管理器
+		manager = serial.NewSerialManager(cfg.SerialPort, cfg.BaudRate, 
+			time.Duration(cfg.BroadcastInterval)*time.Millisecond, dataCallback)
+		manager.Start()
+		defer manager.Stop()
+	}
 
 	// 设置优雅关闭信号处理
 	c := make(chan os.Signal, 1)
@@ -80,14 +143,17 @@ func main() {
 		<-c
 		logrus.WithField("module", "MAIN").Info("收到关闭信号，正在清理资源...")
 		fmt.Println("收到关闭信号，正在清理资源...")
-		manager.Stop()
+		
+		if cfg.MockMode {
+			cancel() // 停止模拟数据生成器
+		} else if manager != nil {
+			manager.Stop()
+		}
+		
 		logrus.WithField("module", "MAIN").Info("资源清理完成，程序退出")
 		fmt.Println("资源清理完成，程序退出")
 		os.Exit(0)
 	}()
-
-	manager.Start()
-	defer manager.Stop()
 	
 	addr := fmt.Sprintf(":%d", cfg.WebsocketPort)
 	r := mux.NewRouter()
@@ -99,8 +165,9 @@ func main() {
 	logrus.WithFields(logrus.Fields{
 		"module": "MAIN",
 		"address": addr,
+		"mode": modeStr,
 	}).Info("地磅读取服务已启动")
 	
-	fmt.Printf("地磅读取服务已启动，运行在 http://localhost%s\n", addr)
+	fmt.Printf("地磅读取服务已启动，运行在 http://localhost%s (%s)\n", addr, modeStr)
 	logrus.Fatal(http.ListenAndServe(addr, r))
 }

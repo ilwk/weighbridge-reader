@@ -15,30 +15,32 @@ import (
 )
 
 type SerialManager struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	lastMessage   atomic.Value
-	mu            sync.Mutex
-	port          serial.Port
-	portName      string
-	baudRate      int
-	onMessage     func(string)
-	retryCount    int
-	maxRetries    int
-	retryInterval time.Duration
+	ctx               context.Context
+	cancel            context.CancelFunc
+	lastMessage       atomic.Value
+	mu                sync.Mutex
+	port              serial.Port
+	portName          string
+	baudRate          int
+	onMessage         func(string)
+	retryCount        int
+	maxRetries        int
+	retryInterval     time.Duration
+	broadcastInterval time.Duration
 }
 
-func NewSerialManager(port string, baud int, onMessage func(string)) *SerialManager {
+func NewSerialManager(port string, baud int, broadcastInterval time.Duration, onMessage func(string)) *SerialManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	mgr := &SerialManager{
-		ctx:           ctx,
-		cancel:        cancel,
-		portName:      port,
-		baudRate:      baud,
-		onMessage:     onMessage,
-		retryCount:    0,
-		maxRetries:    10,
-		retryInterval: 5 * time.Second,
+		ctx:               ctx,
+		cancel:            cancel,
+		portName:          port,
+		baudRate:          baud,
+		onMessage:         onMessage,
+		retryCount:        0,
+		maxRetries:        10,
+		retryInterval:     5 * time.Second,
+		broadcastInterval: broadcastInterval,
 	}
 	mgr.lastMessage.Store("")
 	return mgr
@@ -162,9 +164,12 @@ func (s *SerialManager) openPortWithRetry() (serial.Port, error) {
 }
 
 func (s *SerialManager) pushLoop() {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(s.broadcastInterval)
 	defer ticker.Stop()
-	logrus.WithField("module", "Serial").Info("启动数据推送循环")
+	logrus.WithFields(logrus.Fields{
+		"module":   "Serial",
+		"interval": s.broadcastInterval,
+	}).Info("启动数据推送循环")
 	
 	for {
 		select {
