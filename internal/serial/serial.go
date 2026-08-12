@@ -2,13 +2,13 @@ package serial
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"reader/internal/scale"
 
 	"github.com/sirupsen/logrus"
 	"go.bug.st/serial"
@@ -22,6 +22,7 @@ type SerialManager struct {
 	port              serial.Port
 	portName          string
 	baudRate          int
+	scaleModel        string
 	onMessage         func(string)
 	retryCount        int
 	maxRetries        int
@@ -29,13 +30,14 @@ type SerialManager struct {
 	broadcastInterval time.Duration
 }
 
-func NewSerialManager(port string, baud int, broadcastInterval time.Duration, onMessage func(string)) *SerialManager {
+func NewSerialManager(port string, baud int, scaleModel string, broadcastInterval time.Duration, onMessage func(string)) *SerialManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	mgr := &SerialManager{
 		ctx:               ctx,
 		cancel:            cancel,
 		portName:          port,
 		baudRate:          baud,
+		scaleModel:        scale.NormalizeModel(scaleModel),
 		onMessage:         onMessage,
 		retryCount:        0,
 		maxRetries:        10,
@@ -74,7 +76,7 @@ func (s *SerialManager) readLoop() {
 				"error":  err,
 			}).Error("端口打开失败，达到最大重试次数")
 			time.Sleep(30 * time.Second) // 长时间等待后重试
-			s.retryCount = 0 // 重置重试计数
+			s.retryCount = 0             // 重置重试计数
 			continue
 		}
 
@@ -109,18 +111,26 @@ func (s *SerialManager) readLoop() {
 					port.Close()
 					break // 重新打开串口
 				}
-				readData := string(bytes.TrimSpace(line))
+				readData := string(line)
 				if readData == "" {
 					continue
 				}
-				if strings.HasPrefix(readData, "ST,GS") {
-					s.lastMessage.Store(readData)
-					// 数据接收用Debug级别，不会输出到文件日志
+				message, err := scale.Parse(s.scaleModel, readData)
+				if err != nil {
 					logrus.WithFields(logrus.Fields{
 						"module": "Serial",
-						"data":   readData,
-					}).Debug("接收数据")
+						"model":  s.scaleModel,
+						"data":   fmt.Sprintf("%q", readData),
+						"error":  err,
+					}).Debug("忽略无法解析的报文")
+					continue
 				}
+				s.lastMessage.Store(message)
+				// 数据接收用Debug级别，不会输出到文件日志
+				logrus.WithFields(logrus.Fields{
+					"module": "Serial",
+					"data":   message,
+				}).Info("接收重量")
 			}
 		}
 	}
@@ -129,7 +139,7 @@ func (s *SerialManager) readLoop() {
 // openPortWithRetry 尝试打开串口，带有退避重试机制
 func (s *SerialManager) openPortWithRetry() (serial.Port, error) {
 	mode := &serial.Mode{BaudRate: s.baudRate}
-	
+
 	for s.retryCount < s.maxRetries {
 		select {
 		case <-s.ctx.Done():
@@ -156,7 +166,7 @@ func (s *SerialManager) openPortWithRetry() (serial.Port, error) {
 			"error":      err,
 			"retryDelay": retryDelay,
 		}).Error("打开端口失败")
-		
+
 		time.Sleep(retryDelay)
 	}
 
@@ -170,7 +180,7 @@ func (s *SerialManager) pushLoop() {
 		"module":   "Serial",
 		"interval": s.broadcastInterval,
 	}).Info("启动数据推送循环")
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():

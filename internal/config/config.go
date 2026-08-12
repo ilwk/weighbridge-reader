@@ -15,21 +15,23 @@ type MockMessage struct {
 
 // 配置结构体
 type Config struct {
-	SerialPort       string        `json:"serial_port"`
-	BaudRate         int           `json:"baud_rate"`
-	WebsocketPort    int           `json:"websocket_port"`
-	PrinterName      string        `json:"printer_name"`
-	MockMode         bool          `json:"mock_mode"`
-	MockMessages     []MockMessage `json:"mock_messages"`
-	BroadcastInterval int          `json:"broadcast_interval"` // 毫秒
+	SerialPort        string        `json:"serial_port"`
+	BaudRate          int           `json:"baud_rate"`
+	ScaleModel        string        `json:"scale_model"`
+	WebsocketPort     int           `json:"websocket_port"`
+	PrinterName       string        `json:"printer_name"`
+	MockMode          bool          `json:"mock_mode"`
+	MockMessages      []MockMessage `json:"mock_messages"`
+	BroadcastInterval int           `json:"broadcast_interval"` // 毫秒
 }
 
 var defaultConfig = Config{
-	SerialPort:       "COM1",
-	BaudRate:         9600,
-	WebsocketPort:    9900,
-	PrinterName:      "",
-	MockMode:         false,
+	SerialPort:        "COM1",
+	BaudRate:          9600,
+	ScaleModel:        "default",
+	WebsocketPort:     9900,
+	PrinterName:       "",
+	MockMode:          false,
 	BroadcastInterval: 500,
 	MockMessages: []MockMessage{
 		{Message: "ST,GS,+000.000kg"},
